@@ -111,6 +111,7 @@ type Driver struct {
 	Endpoint                string
 	DisableSSL              bool
 	UserDataFile            string
+	UserData                string
 
 	spotInstanceRequestId string
 }
@@ -285,6 +286,11 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 			Usage:  "path to file with cloud-init user data",
 			EnvVar: "AWS_USERDATA",
 		},
+		mcnflag.StringFlag{
+			Name:   "amazonec2-userdata-base64",
+			Usage:  "Cloud-init User data Base64 (ignored if amazonec2-userdata is defined)",
+			EnvVar: "AWS_USERDATA_BASE64",
+		},
 	}
 }
 
@@ -383,6 +389,7 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 	d.RetryCount = flags.Int("amazonec2-retries")
 	d.OpenPorts = flags.StringSlice("amazonec2-open-port")
 	d.UserDataFile = flags.String("amazonec2-userdata")
+	d.UserData = flags.String("amazonec2-userdata-base64")
 
 	d.DisableSSL = flags.Bool("amazonec2-insecure-transport")
 
@@ -610,11 +617,10 @@ func (d *Driver) innerCreate() error {
 		return err
 	}
 
-	var userdata string
 	if b64, err := d.Base64UserData(); err != nil {
 		return err
 	} else {
-		userdata = b64
+		d.UserData = b64
 	}
 
 	bdm := &ec2.BlockDeviceMapping{
@@ -653,7 +659,7 @@ func (d *Driver) innerCreate() error {
 				},
 				EbsOptimized:        &d.UseEbsOptimizedInstance,
 				BlockDeviceMappings: []*ec2.BlockDeviceMapping{bdm},
-				UserData:            &userdata,
+				UserData:            &d.UserData,
 			},
 			InstanceCount: aws.Int64(1),
 			SpotPrice:     &d.SpotPrice,
@@ -736,7 +742,7 @@ func (d *Driver) innerCreate() error {
 			},
 			EbsOptimized:        &d.UseEbsOptimizedInstance,
 			BlockDeviceMappings: []*ec2.BlockDeviceMapping{bdm},
-			UserData:            &userdata,
+			UserData:            &d.UserData,
 		})
 
 		if err != nil {
